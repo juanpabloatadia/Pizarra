@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  
+  <
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pizarra en Línea</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif; /* Establece la fuente de la página */
+      text-align: center; /* Alinea el texto en el centro */
+      margin: 0; /* Elimina el margen exterior */
+      padding: 0; /* Elimina el relleno exterior */
+      background-color: #f0f0f0; /* Establece el color de fondo de la página */
+    }
+    .canvas-container {
+      background-color: rgb(18, 107, 37); /* Establece el color de fondo del contenedor del lienzo */
+      margin: 20px auto; /* Margen en la parte superior y inferior, centrado horizontalmente */
+      border: 2px solid #000; /* Establece un borde negro alrededor del contenedor */
+    }
+    canvas {
+      border: 1px solid #ccc; /* Establece un borde gris alrededor del lienzo */
+    }
+    .controls {
+      margin-top: 10px; /* Espacio superior entre el lienzo y los controles */
+    }
+    button, input {
+      font-size: 16px; /* Tamaño de fuente para botones e input */
+      padding: 5px 10px; /* Relleno en botones e input */
+      margin: 0 5px; /* Margen izquierdo y derecho en botones e input */
+    }
+    /* Estilo para el botón de goma de borrar cuando está activado */
+    .eraser-active {
+      background-color: #ff0000; /* Cambia el color de fondo a rojo cuando está activado */
+      color: #ffffff; /* Cambia el color del texto a blanco cuando está activado */
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas-container">
+    <canvas id="canvas"></canvas> <!-- Lienzo donde los usuarios pueden dibujar -->
+  </div>  
+  
+<div class="controls">
+    <button id="clear-button">Limpiar</button> <!-- Botón para borrar todo el contenido del lienzo -->
+    <button id="eraser-button">Goma de Borrar</button> <!-- Botón para activar/desactivar la goma de borrar -->
+    <input type="color" id="color-picker" value="#000000"> <!-- Selector de color para el lápiz -->
+  </div>
+  <script>
+    // JavaScript para la funcionalidad de la pizarra
+    // Comenzamos seleccionando elementos del DOM y configurando el contexto del lienzo:
+
+    const canvas = document.getElementById('canvas'); // Obtiene el elemento de lienzo
+    const ctx = canvas.getContext('2d'); // Obtiene el contexto 2D del lienzo
+    const clearButton = document.getElementById('clear-button'); // Obtiene el botón de limpiar
+    const eraserButton = document.getElementById('eraser-button'); // Obtiene el botón de goma de borrar
+    const colorPicker = document.getElementById('color-picker'); // Obtiene el selector de color
+    let drawing = false; // Variable para rastrear si se está dibujando
+    canvas.width = window.innerWidth - 40; // Establece el ancho del lienzo
+    canvas.height = 400; // Establece la altura del lienzo
+    ctx.lineWidth = 5; // Establece el ancho del trazo
+    ctx.lineJoin = 'round'; // Establece el tipo de unión de las líneas
+    ctx.lineCap = 'round'; // Establece el estilo de final de las líneas
+    ctx.strokeStyle = colorPicker.value; // Establece el color del trazo en el color inicial seleccionado
+    let lastX, lastY; // Variables para almacenar las coordenadas del último punto de dibujo
+
+    let isEraserMode = false; // Variable para indicar si el modo de goma de borrar está activado
+
+    // Agregamos un escucha de evento para el botón de goma de borrar:
+    eraserButton.addEventListener('click', () => {
+      isEraserMode = !isEraserMode; // Alternar modo borrador
+      if (isEraserMode) {
+        ctx.strokeStyle = getComputedStyle(document.querySelector('.canvas-container')).backgroundColor;
+        eraserButton.classList.add('eraser-active'); // Agrega la clase cuando está activado
+      } else {
+        ctx.strokeStyle = colorPicker.value; // Restablece el color del trazo al valor del selector de color
+        eraserButton.classList.remove('eraser-active'); // Quita la clase cuando está desactivado
+      }
+    });
+
+    // A continuación, definimos funciones para rastrear y dibujar:
+    function startDrawing(e) {
+      drawing = true;
+      lastX = e.clientX - canvas.offsetLeft; // Obtiene la posición X relativa al lienzo
+      lastY = e.clientY - canvas.offsetTop; // Obtiene la posición Y relativa al lienzo
+    }
+
+    function draw(e) {
+      if (!drawing) return; // Si no se está dibujando, no hacer nada
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop);
+      ctx.stroke();
+      lastX = e.clientX - canvas.offsetLeft;
+      lastY = e.clientY - canvas.offsetTop;
+      // Enviar datos de dibujo a otros usuarios a través de WebSocket
+      const drawingData = {
+        x: lastX,
+        y: lastY,
+        color: ctx.strokeStyle,
+      };
+      // Suponiendo que tienes una conexión WebSocket llamada 'ws'
+      ws.send(JSON.stringify(drawingData));
+    }
+
+    function stopDrawing() {
+      drawing = false;
+      ctx.closePath();
+    }
+
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);  // Borra todo el contenido del lienzo
+       // Enviar un mensaje claro a otros usuarios a través de WebSocket
+      ws.send('clear');
+    }
+
+    // Manejamos eventos táctiles para dispositivos móviles y eventos de mouse:
+    canvas.addEventListener('touchstart', (e) => {
+      startDrawing(e.touches[0]); // Maneja eventos táctiles para iniciar el dibujo
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+      draw(e.touches[0]); // Maneja eventos táctiles para dibujar
+    });
+
+    canvas.addEventListener('touchend', stopDrawing); // Maneja eventos táctiles para detener el dibujo
+
+    canvas.addEventListener('mousedown', startDrawing); // Maneja clics del mouse para iniciar el dibujo
+    canvas.addEventListener('mousemove', draw); // Maneja movimientos del mouse para dibujar
+    canvas.addEventListener('mouseup', stopDrawing); // Maneja la liberación del botón del mouse para detener el dibujo
+    canvas.addEventListener('mouseout', stopDrawing); // Maneja el puntero del mouse fuera del lienzo para detener el dibujo
+
+    clearButton.addEventListener('click', clearCanvas); // Agrega un escucha de evento al botón "Limpiar" para borrar el lienzo
+
+    colorPicker.addEventListener('input', (e) => {
+      ctx.strokeStyle = e.target.value; // Cambia el color del trazo según la selección de color del usuario
+      if (isEraserMode) {
+        ctx.strokeStyle = 'rgb(18, 107, 37)'; // Restablece el color del trazo al color de la goma de borrar si está activada
+     }
+    });
+
+    // A continuación, establecemos una conexión WebSocket con el servidor:
+    const ws = new WebSocket('ws://192.168.0.248:3001'); // Establece una conexión WebSocket con el servidor en la dirección 'ws://192.168.0.248:3001'
+
+    // Manejamos los mensajes entrantes a través de WebSocket:
+
+    ws.addEventListener('message', (event) => {
+      const data = JSON.parse(event.data); // Analiza el mensaje JSON recibido
+      if (data === 'clear') {
+        clearCanvas(); // Borra el lienzo si el mensaje es 'clear'
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(data.x, data.y); // Comienza un nuevo trazo en las coordenadas recibidas
+        ctx.strokeStyle = data.color; // Establece el color del trazo según los datos recibidos
+        ctx.lineTo(data.x, data.y); // Dibuja hasta las coordenadas recibidas
+        ctx.stroke();
+        ctx.closePath();
+      }
+    });
+  </script>
+</body>
+</html>
